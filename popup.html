@@ -1,0 +1,57 @@
+<!DOCTYPE html>
+<html lang="en">
+
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Console Log Extractor</title>
+  <link rel="stylesheet" href="popup.css">
+</head>
+
+<body>
+  <div class="container">
+    <header>
+      <h1>Console Log Extractor</h1>
+    </header>
+
+    <div class="controls">
+      <input type="text" id="pattern" placeholder="Filter pattern (e.g., 'some pattern', 'error')" />
+
+      <div class="regex-toggle">
+        <input type="checkbox" id="useRegex">
+        <label for="useRegex">Use regex pattern</label>
+      </div>
+
+      <div class="buttons">
+        <button id="refreshBtn" class="btn btn-primary">Refresh</button>
+        <button id="copyBtn" class="btn btn-secondary">Copy All</button>
+        <button id="copySelectedBtn" class="btn btn-secondary">Copy Selected</button>
+        <button id="clearBtn" class="btn btn-secondary">Clear</button>
+      </div>
+    </div>
+
+    <div class="stats" id="stats">
+      Loading logs...
+    </div>
+
+    <div class="log-container" id="logContainer">
+      <div class="empty-state">
+        <p>Loading console logs...</p>
+      </div>
+    </div>
+
+
+
+    <div class="footer">
+      <p class="version">Deep Copy + Selective Copy</p>
+    </div>
+  </div>
+
+  <div id="notification" class="notification hidden">
+    Notification
+  </div>
+
+  <script src="popup.js"></script>
+</body>
+
+</html>

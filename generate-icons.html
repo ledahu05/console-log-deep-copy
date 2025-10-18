@@ -1,0 +1,160 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Generate Extension Icons</title>
+  <style>
+    body {
+      font-family: Arial, sans-serif;
+      padding: 20px;
+      background: #f5f5f5;
+    }
+    .container {
+      max-width: 800px;
+      margin: 0 auto;
+      background: white;
+      padding: 30px;
+      border-radius: 8px;
+      box-shadow: 0 2px 8px rgba(0,0,0,0.1);
+    }
+    h1 {
+      color: #667eea;
+    }
+    .canvas-container {
+      margin: 20px 0;
+      padding: 20px;
+      background: #f9f9f9;
+      border-radius: 4px;
+    }
+    canvas {
+      border: 2px solid #ddd;
+      margin: 10px;
+      image-rendering: pixelated;
+    }
+    button {
+      background: #667eea;
+      color: white;
+      border: none;
+      padding: 12px 24px;
+      border-radius: 4px;
+      cursor: pointer;
+      font-size: 16px;
+      margin: 5px;
+    }
+    button:hover {
+      background: #5568d3;
+    }
+    .instructions {
+      background: #fff8e1;
+      padding: 15px;
+      border-left: 4px solid #FF9800;
+      margin: 20px 0;
+    }
+  </style>
+</head>
+<body>
+  <div class="container">
+    <h1>Deep Copy Console - Icon Generator</h1>
+
+    <div class="instructions">
+      <strong>Instructions:</strong>
+      <ol>
+        <li>The icons are generated automatically below</li>
+        <li>Click each "Download" button to save the icons</li>
+        <li>Save them in the <code>icons/</code> folder with the correct names</li>
+      </ol>
+    </div>
+
+    <div class="canvas-container">
+      <h3>Icon 16x16</h3>
+      <canvas id="icon16" width="16" height="16"></canvas>
+      <br>
+      <button onclick="downloadIcon('icon16', 'icon16.png')">Download icon16.png</button>
+    </div>
+
+    <div class="canvas-container">
+      <h3>Icon 48x48</h3>
+      <canvas id="icon48" width="48" height="48"></canvas>
+      <br>
+      <button onclick="downloadIcon('icon48', 'icon48.png')">Download icon48.png</button>
+    </div>
+
+    <div class="canvas-container">
+      <h3>Icon 128x128</h3>
+      <canvas id="icon128" width="128" height="128"></canvas>
+      <br>
+      <button onclick="downloadIcon('icon128', 'icon128.png')">Download icon128.png</button>
+    </div>
+  </div>
+
+  <script>
+    function drawIcon(canvas) {
+      const ctx = canvas.getContext('2d');
+      const size = canvas.width;
+
+      // Background gradient
+      const gradient = ctx.createLinearGradient(0, 0, size, size);
+      gradient.addColorStop(0, '#667eea');
+      gradient.addColorStop(1, '#764ba2');
+      ctx.fillStyle = gradient;
+      ctx.fillRect(0, 0, size, size);
+
+      // Draw console-like brackets
+      ctx.strokeStyle = 'white';
+      ctx.lineWidth = Math.max(2, size / 20);
+      ctx.lineCap = 'round';
+      ctx.lineJoin = 'round';
+
+      const margin = size * 0.2;
+      const innerSize = size - (margin * 2);
+
+      // Left bracket
+      ctx.beginPath();
+      ctx.moveTo(margin + innerSize * 0.3, margin);
+      ctx.lineTo(margin, margin);
+      ctx.lineTo(margin, margin + innerSize);
+      ctx.lineTo(margin + innerSize * 0.3, margin + innerSize);
+      ctx.stroke();
+
+      // Right bracket
+      ctx.beginPath();
+      ctx.moveTo(margin + innerSize * 0.7, margin);
+      ctx.lineTo(margin + innerSize, margin);
+      ctx.lineTo(margin + innerSize, margin + innerSize);
+      ctx.lineTo(margin + innerSize * 0.7, margin + innerSize);
+      ctx.stroke();
+
+      // Center lines (console cursor)
+      const lineY = size / 2;
+      const lineStart = margin + innerSize * 0.35;
+      const lineEnd = margin + innerSize * 0.65;
+
+      ctx.beginPath();
+      ctx.moveTo(lineStart, lineY - size * 0.05);
+      ctx.lineTo(lineEnd, lineY - size * 0.05);
+      ctx.stroke();
+
+      ctx.beginPath();
+      ctx.moveTo(lineStart, lineY + size * 0.05);
+      ctx.lineTo(lineEnd, lineY + size * 0.05);
+      ctx.stroke();
+    }
+
+    function downloadIcon(canvasId, filename) {
+      const canvas = document.getElementById(canvasId);
+      const link = document.createElement('a');
+      link.download = filename;
+      link.href = canvas.toDataURL('image/png');
+      link.click();
+    }
+
+    // Draw all icons on page load
+    window.onload = function() {
+      drawIcon(document.getElementById('icon16'));
+      drawIcon(document.getElementById('icon48'));
+      drawIcon(document.getElementById('icon128'));
+    };
+  </script>
+</body>
+</html>
