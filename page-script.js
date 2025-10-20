@@ -2,10 +2,17 @@
 (function () {
     'use strict';
 
-    const consoleLogs = [];
-    const maxLogs = 5000;
+    // Constants
+    const MAX_LOGS = 5000;
+    const EVENT_GET_LOGS = '__consoleLogExtractor_getLogs';
+    const EVENT_LOGS_RESPONSE = '__consoleLogExtractor_logsResponse';
+    const EVENT_CLEAR_LOGS = '__consoleLogExtractor_clearLogs';
+    const EVENT_CLEAR_RESPONSE = '__consoleLogExtractor_clearResponse';
+    const DATA_ELEMENT_ID = '__consoleLogExtractorData';
 
-    // Store original console methods IMMEDIATELY
+    const consoleLogs = [];
+
+    // Store original console methods IMMEDIATELY before any interception
     const originalConsole = {
         log: console.log,
         info: console.info,
@@ -14,7 +21,13 @@
         debug: console.debug
     };
 
-    // Deep clone function
+    /**
+     * Deep clones an object with support for circular references, special types
+     * Handles: Date, RegExp, Error, DOM Elements, Arrays, Objects
+     * @param {*} obj - Object to clone
+     * @param {WeakMap} seen - Tracks visited objects to handle circular references
+     * @returns {*} Deep cloned copy
+     */
     function deepClone(obj, seen = new WeakMap()) {
         if (obj === null || typeof obj !== 'object') {
             return obj;
@@ -68,7 +81,11 @@
         }
     }
 
-    // Capture console messages
+    /**
+     * Captures and stores a console message with deep copy of all arguments
+     * @param {string} type - Console method type (log, info, warn, error, debug)
+     * @param {Array} args - Arguments passed to the console method
+     */
     function captureMessage(type, args) {
         const timestamp = new Date().toISOString();
         const clonedArgs = args.map((arg) => deepClone(arg));
@@ -97,12 +114,28 @@
         };
 
         consoleLogs.push(logEntry);
-        if (consoleLogs.length > maxLogs) {
+        if (consoleLogs.length > MAX_LOGS) {
             consoleLogs.shift();
         }
     }
 
-    // Override console methods IMMEDIATELY - before any other script
+    /**
+     * Gets or creates the DOM element used to share data with content script
+     * Uses a hidden <script type="application/json"> element to bridge isolated worlds
+     */
+    function getOrCreateDataElement() {
+        let dataElement = document.getElementById(DATA_ELEMENT_ID);
+        if (!dataElement) {
+            dataElement = document.createElement('script');
+            dataElement.id = DATA_ELEMENT_ID;
+            dataElement.type = 'application/json';
+            dataElement.style.display = 'none';
+            document.documentElement.appendChild(dataElement);
+        }
+        return dataElement;
+    }
+
+    // Override console methods IMMEDIATELY - before any other script can run
     ['log', 'info', 'warn', 'error', 'debug'].forEach((method) => {
         console[method] = function (...args) {
             captureMessage(method, args);
@@ -110,37 +143,27 @@
         };
     });
 
-    // Listen for requests from content script
-    document.addEventListener('__consoleLogExtractor_getLogs', function () {
-        originalConsole.log(
-            `[Page] Responding with ${consoleLogs.length} logs`
-        );
-        // Store logs in DOM (the only truly shared thing between isolated worlds)
-        let dataElement = document.getElementById('__consoleLogExtractorData');
-        if (!dataElement) {
-            dataElement = document.createElement('script');
-            dataElement.id = '__consoleLogExtractorData';
-            dataElement.type = 'application/json';
-            dataElement.style.display = 'none';
-            document.documentElement.appendChild(dataElement);
-        }
+    // Listen for getLogs request from content script
+    document.addEventListener(EVENT_GET_LOGS, function () {
+        // Store logs in DOM element (the only truly shared thing between isolated worlds)
+        const dataElement = getOrCreateDataElement();
         dataElement.textContent = JSON.stringify(consoleLogs);
-        // Dispatch event as signal only
-        document.dispatchEvent(
-            new CustomEvent('__consoleLogExtractor_logsResponse')
-        );
+
+        // Dispatch event to notify content script that data is ready
+        document.dispatchEvent(new CustomEvent(EVENT_LOGS_RESPONSE));
     });
 
-    document.addEventListener('__consoleLogExtractor_clearLogs', function () {
+    // Listen for clearLogs request from content script
+    document.addEventListener(EVENT_CLEAR_LOGS, function () {
         consoleLogs.length = 0;
-        // Update DOM element
-        const dataElement = document.getElementById('__consoleLogExtractorData');
+
+        // Update DOM element to reflect cleared state
+        const dataElement = document.getElementById(DATA_ELEMENT_ID);
         if (dataElement) {
             dataElement.textContent = '[]';
         }
-        document.dispatchEvent(
-            new CustomEvent('__consoleLogExtractor_clearResponse')
-        );
+
+        document.dispatchEvent(new CustomEvent(EVENT_CLEAR_RESPONSE));
     });
 
     // Mark that the extractor is active

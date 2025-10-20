@@ -135,17 +135,74 @@ deep-copy/
 ├── popup.html          # Extension popup UI
 ├── popup.css           # Popup styles
 ├── popup.js            # Popup logic and filtering
-├── content.js          # Console interception and log capture
+├── content.js          # Content script - bridges page and extension
+├── page-script.js      # Page script - intercepts console in page context
 ├── background.js       # Service worker
 └── icons/              # Extension icons
 ```
 
+### How It Works
+
+The extension uses a sophisticated architecture to overcome Chrome's isolated worlds limitation:
+
+#### The Isolated Worlds Problem
+
+Chrome extensions have three separate JavaScript contexts:
+- **Page Context**: Where the website's JavaScript runs
+- **Content Script Context**: An isolated environment with DOM access but separate global scope
+- **Extension Context**: Where popup.js and background scripts run
+
+The problem: `console.log()` calls happen in the page context, but we need to capture them in the content script to send to the popup.
+
+#### Our Solution
+
+1. **Page Script Injection** (`page-script.js`):
+   - Injected directly into the page context at the earliest possible moment
+   - Intercepts console methods before any other scripts run
+   - Deep clones all arguments to preserve object state at time of logging
+   - Stores logs in a hidden DOM element (`<script type="application/json">`)
+
+2. **Content Script Bridge** (`content.js`):
+   - Runs in isolated world but shares the DOM with page context
+   - Listens for requests from popup via Chrome message passing
+   - Communicates with page script using DOM events
+   - Reads logs from shared DOM element (the only truly shared data structure)
+
+3. **Popup Interface** (`popup.js`):
+   - Requests logs from content script every 2 seconds
+   - Applies filtering and displays results
+   - Handles copy-to-clipboard functionality
+
+#### Communication Flow
+
+```
+Popup (Extension Context)
+    ↓ chrome.runtime.sendMessage()
+Content Script (Isolated World)
+    ↓ document.dispatchEvent() → document.addEventListener()
+Page Script (Page Context)
+    ↓ Writes JSON to DOM element
+Content Script (Isolated World)
+    ↓ Reads from shared DOM element
+Popup (Extension Context)
+```
+
+#### SPA Navigation Handling
+
+When navigating in Single Page Applications:
+- Page context is reset (page script stops working)
+- Content script persists but loses connection
+- Solution: Timeout-based detection and automatic re-injection
+- If page script doesn't respond within 100ms, content script re-injects it
+
 ### Key Technologies
 
 -   Chrome Extension Manifest V3
--   Content Scripts for console interception
+-   Content Scripts in isolated worlds
+-   Page script injection for early console interception
+-   DOM-based inter-world communication
 -   Deep cloning with circular reference handling
--   Real-time filtering and display
+-   Event-driven architecture
 
 ## Troubleshooting
 
@@ -158,12 +215,14 @@ deep-copy/
 
 **Extension not working after SPA navigation?**
 
--   The extension now automatically re-injects itself if needed
--   If you see "Content script not loaded", the extension will attempt auto-injection
--   Look for debug messages in the DevTools console:
-    -   `[Console Log Extractor] Content script loaded`
-    -   `[Console Log Extractor] Responding with X logs`
--   If auto-injection fails, refresh the page (F5) to force re-initialization
+-   The extension now automatically re-injects the page script when needed
+-   When you open the popup after SPA navigation, it may return empty logs on first attempt
+-   The extension will auto-inject and subsequent attempts (within 2s) will work
+-   Look for these messages in DevTools console:
+    -   `[Console Log Extractor] Content script loaded` - Content script active
+    -   `[Console Log Extractor] Page script injected` - Script re-injected after SPA navigation
+    -   `[Console Log Extractor] Ready to capture logs` - Page script is working
+-   If auto-injection fails, manually refresh the page (F5)
 
 **Extension not working?**
 
@@ -179,7 +238,8 @@ deep-copy/
 
 ## Version History
 
--   **v3.1.0**: Added SPA support with automatic content script injection and improved error handling
+-   **v3.2.0**: Code refactoring and improved documentation with technical architecture details
+-   **v3.1.0**: Fixed SPA support using DOM-based communication between isolated worlds
 -   **v3.0.0**: Complete refactor with deep copy support and auto-loading
 -   **v2.0.0**: Added debugger protocol support
 -   **v1.0.0**: Initial release

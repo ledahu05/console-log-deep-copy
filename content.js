@@ -2,7 +2,18 @@
 (function () {
     'use strict';
 
-    // Function to inject page script
+    // Constants
+    const EVENT_GET_LOGS = '__consoleLogExtractor_getLogs';
+    const EVENT_LOGS_RESPONSE = '__consoleLogExtractor_logsResponse';
+    const EVENT_CLEAR_LOGS = '__consoleLogExtractor_clearLogs';
+    const EVENT_CLEAR_RESPONSE = '__consoleLogExtractor_clearResponse';
+    const DATA_ELEMENT_ID = '__consoleLogExtractorData';
+    const RESPONSE_TIMEOUT_MS = 100;
+
+    /**
+     * Injects the page script into the page's main context
+     * This needs to run in the page context to intercept console calls before other scripts
+     */
     function injectPageScript() {
         const script = document.createElement('script');
         script.src = chrome.runtime.getURL('page-script.js');
@@ -28,81 +39,79 @@
         console.log('[Console Log Extractor] Content script already active');
     }
 
-    // Content script part - bridge between page and extension
+    /**
+     * Reads logs from the DOM element shared between isolated worlds
+     * Returns parsed logs array or empty array on failure
+     */
+    function readLogsFromDOM() {
+        const dataElement = document.getElementById(DATA_ELEMENT_ID);
+        let logs = [];
+        if (dataElement && dataElement.textContent) {
+            try {
+                logs = JSON.parse(dataElement.textContent);
+            } catch (e) {
+                console.error('[Console Log Extractor] Failed to parse logs:', e);
+            }
+        }
+        return logs;
+    }
+
+    /**
+     * Handles getLogs request from popup
+     * Uses DOM-based communication to bridge isolated worlds (page script ↔ content script)
+     */
+    function handleGetLogsRequest(sendResponse) {
+        let responded = false;
+
+        const listener = function (event) {
+            if (responded) return;
+            responded = true;
+            document.removeEventListener(EVENT_LOGS_RESPONSE, listener);
+
+            const logs = readLogsFromDOM();
+            sendResponse({ logs: logs });
+        };
+
+        document.addEventListener(EVENT_LOGS_RESPONSE, listener);
+        document.dispatchEvent(new CustomEvent(EVENT_GET_LOGS));
+
+        // Timeout fallback: if page script doesn't respond, re-inject it
+        setTimeout(() => {
+            if (!responded) {
+                responded = true;
+                document.removeEventListener(EVENT_LOGS_RESPONSE, listener);
+                console.warn(
+                    '[Console Log Extractor] Page script not responding, re-injecting'
+                );
+                injectPageScript();
+                sendResponse({ logs: [], error: 'Page script re-injected, please try again' });
+            }
+        }, RESPONSE_TIMEOUT_MS);
+
+        return true; // Keep channel open for async response
+    }
+
+    /**
+     * Handles clearLogs request from popup
+     */
+    function handleClearLogsRequest(sendResponse) {
+        const listener = function (event) {
+            document.removeEventListener(EVENT_CLEAR_RESPONSE, listener);
+            sendResponse({ success: true });
+        };
+
+        document.addEventListener(EVENT_CLEAR_RESPONSE, listener);
+        document.dispatchEvent(new CustomEvent(EVENT_CLEAR_LOGS));
+
+        return true; // Keep channel open for async response
+    }
+
+    // Message listener - bridge between page and extension popup
     chrome.runtime.onMessage.addListener((request, sender, sendResponse) => {
         if (request.action === 'getLogs') {
-            console.log('[Content] Received getLogs request');
-            // Request logs from page script with timeout
-            let responded = false;
-            const listener = function (event) {
-                console.log('[Content] Received response event');
-                // Read logs from DOM element (truly shared across isolated worlds)
-                const dataElement = document.getElementById('__consoleLogExtractorData');
-                let logs = [];
-                if (dataElement && dataElement.textContent) {
-                    try {
-                        logs = JSON.parse(dataElement.textContent);
-                        console.log('[Content] Retrieved logs from DOM:', logs.length);
-                    } catch (e) {
-                        console.error('[Content] Failed to parse logs:', e);
-                    }
-                } else {
-                    console.warn('[Content] No data element found');
-                }
-                if (responded) return;
-                responded = true;
-                document.removeEventListener(
-                    '__consoleLogExtractor_logsResponse',
-                    listener
-                );
-                sendResponse({ logs: logs });
-            };
-
-            document.addEventListener(
-                '__consoleLogExtractor_logsResponse',
-                listener
-            );
-            console.log('[Content] Dispatching getLogs event');
-            document.dispatchEvent(
-                new CustomEvent('__consoleLogExtractor_getLogs')
-            );
-
-            // Timeout fallback: if page script doesn't respond, re-inject it
-            setTimeout(() => {
-                if (!responded) {
-                    console.warn('[Content] Timeout! Page script did not respond within 100ms');
-                    responded = true;
-                    document.removeEventListener(
-                        '__consoleLogExtractor_logsResponse',
-                        listener
-                    );
-                    console.warn(
-                        '[Console Log Extractor] Page script not responding, re-injecting'
-                    );
-                    injectPageScript();
-                    sendResponse({ logs: [], error: 'Page script re-injected, please try again' });
-                }
-            }, 100);
-
-            return true; // Keep channel open for async response
+            return handleGetLogsRequest(sendResponse);
         } else if (request.action === 'clearLogs') {
-            const listener = function (event) {
-                document.removeEventListener(
-                    '__consoleLogExtractor_clearResponse',
-                    listener
-                );
-                sendResponse({ success: true });
-            };
-
-            document.addEventListener(
-                '__consoleLogExtractor_clearResponse',
-                listener
-            );
-            document.dispatchEvent(
-                new CustomEvent('__consoleLogExtractor_clearLogs')
-            );
-
-            return true; // Keep channel open for async response
+            return handleClearLogsRequest(sendResponse);
         }
         return false;
     });

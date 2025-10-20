@@ -1,0 +1,20 @@
+# AI Snapshots
+.snapshots/
+
+# OS Files
+.DS_Store
+Thumbs.db
+
+# Editor Files
+.vscode/
+.idea/
+*.swp
+*.swo
+*~
+
+# Node modules (if any future development needs it)
+node_modules/
+
+# Temporary files
+*.tmp
+*.log
