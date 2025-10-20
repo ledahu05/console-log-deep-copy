@@ -9,6 +9,8 @@ A Chrome extension that captures console logs from web pages and allows you to f
 -   **Pattern filtering**: Filter logs by text pattern or regex
 -   **Deep copy**: Copy filtered logs as JSON with full object/array structures preserved
 -   **Visual display**: Color-coded log types with timestamps
+-   **SPA support**: Works across Single Page Application (SPA) navigation with automatic script injection
+-   **Selective copy**: Choose specific logs to copy using checkboxes
 
 ## Installation
 
@@ -152,6 +154,16 @@ deep-copy/
 -   Refresh the page to ensure content script is injected
 -   Check that the page is actually logging to console
 -   Open DevTools console to verify logs are there
+-   Look for the green "[Console Log Extractor] Ready to capture logs" message in the console
+
+**Extension not working after SPA navigation?**
+
+-   The extension now automatically re-injects itself if needed
+-   If you see "Content script not loaded", the extension will attempt auto-injection
+-   Look for debug messages in the DevTools console:
+    -   `[Console Log Extractor] Content script loaded`
+    -   `[Console Log Extractor] Responding with X logs`
+-   If auto-injection fails, refresh the page (F5) to force re-initialization
 
 **Extension not working?**
 
@@ -167,6 +179,7 @@ deep-copy/
 
 ## Version History
 
+-   **v3.1.0**: Added SPA support with automatic content script injection and improved error handling
 -   **v3.0.0**: Complete refactor with deep copy support and auto-loading
 -   **v2.0.0**: Added debugger protocol support
 -   **v1.0.0**: Initial release

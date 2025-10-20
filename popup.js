@@ -47,42 +47,111 @@ async function extractLogs(showSuccessNotification = true) {
         });
 
         // Get logs from content script
-        chrome.tabs.sendMessage(tab.id, { action: 'getLogs' }, (response) => {
-            if (chrome.runtime.lastError) {
-                showNotification(
-                    'Content script not loaded. Please refresh the page (F5).',
-                    'error'
-                );
-                extractedLogs = [];
-                applyFilter();
-                return;
-            }
+        chrome.tabs.sendMessage(
+            tab.id,
+            { action: 'getLogs' },
+            async (response) => {
+                if (chrome.runtime.lastError) {
+                    // Content script not responding - try to inject it
+                    console.log(
+                        '[Extension] Content script not responding, attempting to inject...'
+                    );
 
-            if (response && response.logs) {
-                extractedLogs = response.logs;
-                applyFilter();
+                    try {
+                        // Check if we can inject (not on chrome:// pages)
+                        if (
+                            tab.url &&
+                            (tab.url.startsWith('chrome://') ||
+                                tab.url.startsWith('chrome-extension://'))
+                        ) {
+                            showNotification(
+                                'Cannot run on this page. Navigate to a regular website.',
+                                'error'
+                            );
+                            extractedLogs = [];
+                            applyFilter();
+                            return;
+                        }
 
-                if (showSuccessNotification) {
-                    if (extractedLogs.length === 0) {
-                        showNotification(
-                            'No logs captured yet. Try refreshing the page or creating new logs.',
-                            'warning'
+                        // Try to inject the content script programmatically
+                        await chrome.scripting.executeScript({
+                            target: { tabId: tab.id },
+                            files: ['content.js']
+                        });
+
+                        console.log(
+                            '[Extension] Content script injected, retrying...'
                         );
-                    } else {
-                        showNotification(
-                            `Loaded ${extractedLogs.length} logs`,
-                            'success'
+
+                        // Wait a bit for injection to complete
+                        setTimeout(() => {
+                            // Retry getting logs
+                            chrome.tabs.sendMessage(
+                                tab.id,
+                                { action: 'getLogs' },
+                                (retryResponse) => {
+                                    if (chrome.runtime.lastError) {
+                                        showNotification(
+                                            'Failed to connect. Try refreshing the page (F5).',
+                                            'error'
+                                        );
+                                        extractedLogs = [];
+                                        applyFilter();
+                                        return;
+                                    }
+                                    handleLogsResponse(
+                                        retryResponse,
+                                        showSuccessNotification
+                                    );
+                                }
+                            );
+                        }, 200);
+                    } catch (injectError) {
+                        console.error(
+                            '[Extension] Failed to inject content script:',
+                            injectError
                         );
+                        showNotification(
+                            'Content script not loaded. Please refresh the page (F5).',
+                            'error'
+                        );
+                        extractedLogs = [];
+                        applyFilter();
                     }
+                    return;
                 }
-            } else {
-                extractedLogs = [];
-                applyFilter();
+
+                handleLogsResponse(response, showSuccessNotification);
             }
-        });
+        );
     } catch (error) {
         console.error('Error extracting logs:', error);
         showNotification('Error: ' + error.message, 'error');
+    }
+}
+
+// Helper function to handle logs response
+function handleLogsResponse(response, showSuccessNotification) {
+    if (response && response.logs) {
+        extractedLogs = response.logs;
+        applyFilter();
+
+        if (showSuccessNotification) {
+            if (extractedLogs.length === 0) {
+                showNotification(
+                    'No logs captured yet. Try refreshing the page or creating new logs.',
+                    'warning'
+                );
+            } else {
+                showNotification(
+                    `Loaded ${extractedLogs.length} logs`,
+                    'success'
+                );
+            }
+        }
+    } else {
+        extractedLogs = [];
+        applyFilter();
     }
 }
 

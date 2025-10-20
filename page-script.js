@@ -111,22 +111,43 @@
     });
 
     // Listen for requests from content script
-    window.addEventListener('__consoleLogExtractor_getLogs', function () {
-        window.dispatchEvent(
-            new CustomEvent('__consoleLogExtractor_logsResponse', {
-                detail: { logs: consoleLogs }
-            })
+    document.addEventListener('__consoleLogExtractor_getLogs', function () {
+        originalConsole.log(
+            `[Page] Responding with ${consoleLogs.length} logs`
+        );
+        // Store logs in DOM (the only truly shared thing between isolated worlds)
+        let dataElement = document.getElementById('__consoleLogExtractorData');
+        if (!dataElement) {
+            dataElement = document.createElement('script');
+            dataElement.id = '__consoleLogExtractorData';
+            dataElement.type = 'application/json';
+            dataElement.style.display = 'none';
+            document.documentElement.appendChild(dataElement);
+        }
+        dataElement.textContent = JSON.stringify(consoleLogs);
+        // Dispatch event as signal only
+        document.dispatchEvent(
+            new CustomEvent('__consoleLogExtractor_logsResponse')
         );
     });
 
-    window.addEventListener('__consoleLogExtractor_clearLogs', function () {
+    document.addEventListener('__consoleLogExtractor_clearLogs', function () {
         consoleLogs.length = 0;
-        window.dispatchEvent(
-            new CustomEvent('__consoleLogExtractor_clearResponse', {
-                detail: { success: true }
-            })
+        // Update DOM element
+        const dataElement = document.getElementById('__consoleLogExtractorData');
+        if (dataElement) {
+            dataElement.textContent = '[]';
+        }
+        document.dispatchEvent(
+            new CustomEvent('__consoleLogExtractor_clearResponse')
         );
     });
 
-    console.log('Console Log Extractor: Ready to capture logs');
+    // Mark that the extractor is active
+    window.__consoleLogExtractorActive = true;
+    originalConsole.log(
+        '%c[Console Log Extractor]%c Ready to capture logs',
+        'background: #4CAF50; color: white; padding: 2px 5px; border-radius: 3px;',
+        'color: #4CAF50;'
+    );
 })();
